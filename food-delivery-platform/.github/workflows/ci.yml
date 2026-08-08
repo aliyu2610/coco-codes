@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-java:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [restaurant-service, order-service, delivery-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+      - name: Build ${{ matrix.service }}
+        run: mvn -q package -DskipTests
+        working-directory: services/${{ matrix.service }}
+
+  build-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [eta-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ${{ matrix.service }} deps
+        run: pip install -r requirements.txt
+        working-directory: services/${{ matrix.service }}
