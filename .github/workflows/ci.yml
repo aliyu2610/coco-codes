@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: ["main", "develop"]
+
   pull_request:
     branches: ["main"]
 
@@ -117,7 +118,10 @@ jobs:
           cache-dependency-path: services/eta-service/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
 
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short
@@ -147,6 +151,7 @@ jobs:
         run: |
           for i in $(seq 1 24); do
             STATUS=$(docker inspect --format='{{.State.Health.Status}}' infra-mysql-1 2>/dev/null || echo "starting")
+
             echo "MySQL status: $STATUS (attempt $i)"
 
             if [ "$STATUS" = "healthy" ]; then
@@ -156,10 +161,10 @@ jobs:
             sleep 5
           done
 
-          [ "$STATUS" = "healthy" ] || {
+          if [ "$STATUS" != "healthy" ]; then
             docker compose logs mysql
             exit 1
-          }
+          fi
 
       - name: Tear down
         if: always()
