@@ -2,36 +2,147 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["main", "develop"]
   pull_request:
-    branches: [main]
+    branches: ["main"]
+
+# Cancel in-progress runs for the same branch/PR so pushes don't queue up
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-java:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [restaurant-service, order-service, delivery-service]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: "21"
-          distribution: temurin
-      - name: Build ${{ matrix.service }}
-        run: mvn -q package -DskipTests
-        working-directory: services/${{ matrix.service }}
 
-  build-python:
+  # ── order-service (Java / Spring Boot) ──────────────────────────────────────
+  order-service:
+    name: order-service — build & test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [eta-service]
+    # Only run when order-service files change (or workflow itself changes)
+    if: |
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.changed_files, 'services/order-service')
+    defaults:
+      run:
+        working-directory: services/order-service
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: Build & test
+        run: mvn verify -B
+        # Testcontainers integration tests are skipped automatically when
+        # Docker is unavailable (disabledWithoutDocker = true). Unit tests
+        # always run. On GitHub Actions, Docker IS available so the
+        # integration tests will run here.
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: order-service-surefire
+          path: services/order-service/target/surefire-reports/
+
+  # ── restaurant-service (Java / Spring Boot) ─────────────────────────────────
+  restaurant-service:
+    name: restaurant-service — build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/restaurant-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: Build (no tests yet)
+        run: mvn package -DskipTests -B
+
+  # ── delivery-service (Java / Spring Boot) ───────────────────────────────────
+  delivery-service:
+    name: delivery-service — build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/delivery-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: Build (no tests yet)
+        run: mvn package -DskipTests -B
+
+  # ── eta-service (Python / FastAPI) ──────────────────────────────────────────
+  eta-service:
+    name: eta-service — lint & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/eta-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install ${{ matrix.service }} deps
+          cache: pip
+          cache-dependency-path: services/eta-service/requirements.txt
+
+      - name: Install dependencies
         run: pip install -r requirements.txt
-        working-directory: services/${{ matrix.service }}
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  # ── Docker Compose smoke test (main branch only) ─────────────────────────────
+  # Brings up MySQL (infra only — app services commented out in compose)
+  # and verifies the database reaches healthy state within the timeout.
+  smoke-test:
+    name: infra smoke test
+    runs-on: ubuntu-latest
+    needs: [order-service, eta-service]
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start infra containers
+        run: docker compose up -d mysql
+
+      - name: Wait for MySQL healthy
+        run: |
+          for i in $(seq 1 24); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' infra-mysql-1 2>/dev/null || echo "starting")
+            echo "MySQL status: $STATUS (attempt $i)"
+            [ "$STATUS" = "healthy" ] && break
+            sleep 5
+          done
+          [ "$STATUS" = "healthy" ] || (docker compose logs mysql && exit 1)
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
