@@ -7,6 +7,7 @@ import jakarta.persistence.*;
 public class OrderItem {
 
     @Id
+    @Column(name = "id", length = 255, nullable = false)
     private String id;
 
     @Column(name = "order_id", nullable = false)
