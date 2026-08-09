@@ -1,45 +1,113 @@
+# All containers join delivery-net so every service can reach every other
+# service by its compose service name (e.g. http://order-service:8082).
+networks:
+  delivery-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+
 services:
+
+  # ── MySQL 8 ────────────────────────────────────────────────────────────────
+  # Spatial extensions (GEOMETRY, POINT, SPATIAL INDEX, ST_Distance_Sphere)
+  # are built-in to MySQL 8 — no extra plugin or flag needed.
+
   mysql:
     image: mysql:8.0
+    networks: [delivery-net]
     environment:
       MYSQL_ROOT_PASSWORD: root
     ports:
       - "3306:3306"
     volumes:
+      - mysql-data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 10s
-      retries: 5
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # ── Kafka (KRaft mode — no Zookeeper) ─────────────────────────────────────
+  # apache/kafka:3.7.0 ships with KRaft built-in.
+  # KAFKA_PROCESS_ROLES=broker,controller runs both roles in one container,
+  # which is correct for a single-node dev setup.
+  # CLUSTER_ID must be a valid base64-encoded 16-byte UUID — generate once with:
+  #   docker run --rm apache/kafka:3.7.0 /opt/kafka/bin/kafka-storage.sh random-uuid
+
+  # ── App service placeholders (uncomment as each service is built) ──────────
+  # Each block is ready to go — just remove the leading # characters.
+  # healthcheck paths: Java → /actuator/health, Python/Node → /health
 
   restaurant-service:
     build: ../services/restaurant-service
+    networks: [delivery-net]
     ports:
       - "8081:8081"
     depends_on:
       mysql:
         condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/restaurant_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/actuator/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+      start_period: 80s
 
   order-service:
     build: ../services/order-service
+    networks: [delivery-net]
     ports:
       - "8082:8082"
     depends_on:
       mysql:
         condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/order_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/actuator/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+      start_period: 80s
 
   delivery-service:
     build: ../services/delivery-service
+    networks: [delivery-net]
     ports:
       - "8083:8083"
     depends_on:
       mysql:
         condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/delivery_db
+      DB_USER: root
+      DB_PASS: root
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/actuator/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+      start_period: 80s
 
-  eta-service:
-    build:
-      context: ..
-      dockerfile: services/eta-service/Dockerfile
+  eta-service:  
+    build: ../services/eta-service
+    networks: [delivery-net]
     ports:
       - "8084:8084"
+    healthcheck:
+      # use python to probe the local HTTP health endpoint (image is python:3.12-slim)
+      test: ["CMD", "python", "-c", "import sys,urllib.request; r=urllib.request.urlopen('http://localhost:8084/health'); sys.exit(0 if r.getcode()==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 

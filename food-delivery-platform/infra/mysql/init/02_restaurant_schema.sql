@@ -1,9 +1,19 @@
-USE restaurantdb;
+USE restaurant_db;
 
-CREATE TABLE IF NOT EXISTS restaurant (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS restaurants (
+    id         VARCHAR(255)    NOT NULL PRIMARY KEY,
     name       VARCHAR(255) NOT NULL,
-    address    VARCHAR(255),
-    active     BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_open    TINYINT(1)  NOT NULL DEFAULT 1,
+    avg_prep_time_minutes INT NOT NULL,
+    created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS menu_items (
+    id            VARCHAR(255)     NOT NULL PRIMARY KEY,
+    restaurant_id VARCHAR(255)     NOT NULL,
+    name          VARCHAR(255) NOT NULL,
+    price_cents   INT UNSIGNED NOT NULL,
+    available     TINYINT(1)   NOT NULL DEFAULT 1,
+    CONSTRAINT fk_restaurant FOREIGN KEY (restaurant_id) REFERENCES restaurants(id)
 );
