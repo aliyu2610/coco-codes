@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.0
@@ -39,7 +37,9 @@ services:
         condition: service_healthy
 
   eta-service:
-    build: ../services/eta-service
+    build:
+      context: ..
+      dockerfile: services/eta-service/Dockerfile
     ports:
       - "8084:8084"
 
