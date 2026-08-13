@@ -34,7 +34,7 @@ public class Order {
     @Column(name = "eta_minutes")
     private Integer etaMinutes;
 
-    // Delivery coordinates — stored flat for simple JPA mapping.
+    // Delivery coordinates
     @Column(name = "delivery_lat", nullable = false, precision = 9, scale = 6)
     private BigDecimal deliveryLat;
 
@@ -53,11 +53,12 @@ public class Order {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    // Items are loaded separately via OrderItemRepository — avoids N+1 on status lookups.
+    // Items are loaded separately via OrderItemRepository
     @Transient
     private List<OrderItem> items = new ArrayList<>();
 
-    protected Order() {}
+    protected Order() {
+    }
 
     public Order(
             String id,
@@ -86,9 +87,26 @@ public class Order {
         transition(OrderStatus.ACCEPTED);
     }
 
+    /**
+     * Sets the ETA without changing the order status.
+     * ETA is calculated when the order is created.
+     */
+    public void setEtaMinutes(Integer etaMinutes) {
+        this.etaMinutes = etaMinutes;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Assigns the driver using the ETA that was already calculated.
+     * This method does NOT call the ETA service.
+     */
     public void assignDriver(int etaMinutes) {
         this.etaMinutes = etaMinutes;
         transition(OrderStatus.DRIVER_ASSIGNED);
+    }
+
+    public void markDelivered() {
+        transition(OrderStatus.DELIVERED);
     }
 
     private void transition(OrderStatus next) {

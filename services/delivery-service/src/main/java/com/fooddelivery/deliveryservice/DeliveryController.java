@@ -2,6 +2,7 @@ package com.fooddelivery.deliveryservice;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
 
 import java.util.Map;
 
@@ -15,6 +16,24 @@ public class DeliveryController {
         this.deliveryService = deliveryService;
     }
 
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> createDelivery(
+            @RequestBody CreateDeliveryRequest request) {
+
+        var delivery = deliveryService.createDelivery(
+                request.orderId(),
+                request.driverId(),
+                request.etaMinutes()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "deliveryId", delivery.getId(),
+                "orderId", delivery.getOrderId(),
+                "driverId", delivery.getDriverId(),
+                "status", delivery.getStatus().name(),
+                "etaMinutes", delivery.getEtaMinutes()
+        ));
+    }
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<Map<String, Object>> updateStatus(
             @PathVariable String orderId,

@@ -2,6 +2,7 @@ package com.fooddelivery.orderservice.service;
 
 import com.fooddelivery.orderservice.domain.Order;
 import com.fooddelivery.orderservice.domain.OrderStatus;
+import com.fooddelivery.orderservice.eta.EtaClient;
 import com.fooddelivery.orderservice.repository.OrderItemRepository;
 import com.fooddelivery.orderservice.repository.OrderRepository;
 import com.fooddelivery.orderservice.web.CreateOrderRequest;
@@ -11,77 +12,160 @@ import com.fooddelivery.orderservice.web.OrderResponse;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class OrderServiceTest {
 
-    private OrderRepository     orderRepository;
+    private OrderRepository orderRepository;
     private OrderItemRepository orderItemRepository;
-    private OrderService        orderService;
+    private EtaClient etaClient;
+    private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        orderRepository     = mock(OrderRepository.class);
+        orderRepository = mock(OrderRepository.class);
         orderItemRepository = mock(OrderItemRepository.class);
-        orderService        = new OrderService(orderRepository, orderItemRepository);
+        etaClient = mock(EtaClient.class);
 
-        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(orderItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+        orderService = new OrderService(
+                orderRepository,
+                orderItemRepository,
+                etaClient
+        );
+
+        when(orderRepository.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        when(orderItemRepository.saveAll(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        when(etaClient.predictEta(
+                anyString(),
+                anyDouble(),
+                anyInt(),
+                anyDouble(),
+                anyDouble()
+        )).thenReturn(32);
     }
 
     @Test
-    void createOrder_persistsAndPublishes() {
+    void createOrder_persistsAndReceivesEta() {
+
         var req = new CreateOrderRequest(
-                "cust-1", "rest-1",
-                List.of(new OrderItemRequest("item-1", 2, 1000)),
-                new DeliveryAddressRequest(37.77, -122.41, "123 Main St", "San Francisco"));
+                "cust-1",
+                "rest-1",
+                List.of(
+                        new OrderItemRequest("item-1", 2, 1000)
+                ),
+                new DeliveryAddressRequest(
+                        37.77,
+                        -122.41,
+                        "123 Main St",
+                        "San Francisco"
+                )
+        );
 
         OrderResponse response = orderService.createOrder(req);
 
-        assertThat(response.status()).isEqualTo(OrderStatus.PENDING);
-        assertThat(response.totalCents()).isEqualTo(2000);
-        assertThat(response.orderId()).isNotBlank();
+        assertThat(response.status())
+                .isEqualTo(OrderStatus.PENDING);
 
-        verify(orderRepository).save(any(Order.class));
+        assertThat(response.totalCents())
+                .isEqualTo(2000);
+
+        assertThat(response.orderId())
+                .isNotBlank();
+
+        assertThat(response.etaMinutes())
+                .isEqualTo(32);
+
+        verify(orderRepository, atLeastOnce())
+                .save(any(Order.class));
+
+        verify(etaClient)
+                .predictEta(
+                        anyString(),
+                        anyDouble(),
+                        anyInt(),
+                        anyDouble(),
+                        anyDouble()
+                );
     }
 
     @Test
     void markAccepted_transitionsStatus() {
-        var order = new Order("o1", "c1", "r1", 1000,
-                java.math.BigDecimal.valueOf(37.77), java.math.BigDecimal.valueOf(-122.41),
-                "123 Main", "SF");
-        when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+
+        var order = new Order(
+                "o1",
+                "c1",
+                "r1",
+                1000,
+                java.math.BigDecimal.valueOf(37.77),
+                java.math.BigDecimal.valueOf(-122.41),
+                "123 Main",
+                "SF"
+        );
+
+        when(orderRepository.findById("o1"))
+                .thenReturn(Optional.of(order));
 
         orderService.markAccepted("o1");
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.ACCEPTED);
-        verify(orderRepository).save(order);
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.ACCEPTED);
+
+        verify(orderRepository)
+                .save(order);
     }
 
     @Test
-    void markDriverAssigned_setsEta() {
-        var order = new Order("o1", "c1", "r1", 1000,
-                java.math.BigDecimal.valueOf(37.77), java.math.BigDecimal.valueOf(-122.41),
-                "123 Main", "SF");
-        when(orderRepository.findById("o1")).thenReturn(Optional.of(order));
+    void markDriverAssigned_usesExistingEta() {
 
-        orderService.markDriverAssigned("o1", 25);
+        var order = new Order(
+                "o1",
+                "c1",
+                "r1",
+                1000,
+                java.math.BigDecimal.valueOf(37.77),
+                java.math.BigDecimal.valueOf(-122.41),
+                "123 Main",
+                "SF"
+        );
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.DRIVER_ASSIGNED);
-        assertThat(order.getEtaMinutes()).isEqualTo(25);
+        order.setEtaMinutes(32);
+
+        when(orderRepository.findById("o1"))
+                .thenReturn(Optional.of(order));
+
+        orderService.markDriverAssigned("o1");
+
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.DRIVER_ASSIGNED);
+
+        assertThat(order.getEtaMinutes())
+                .isEqualTo(32);
+
+        verifyNoInteractions(etaClient);
+
+        verify(orderRepository)
+                .save(order);
     }
 
     @Test
     void getOrder_throwsWhenNotFound() {
-        when(orderRepository.findById("missing")).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> orderService.getOrder("missing"))
+
+        when(orderRepository.findById("missing"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                () -> orderService.getOrder("missing")
+        )
                 .isInstanceOf(EntityNotFoundException.class);
     }
 }

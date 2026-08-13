@@ -21,6 +21,22 @@ public class DeliveryService {
     }
 
     @Transactional
+    public Delivery createDelivery(String orderId, String driverId, int etaMinutes) {
+        if (repo.findByOrderId(orderId).isPresent()) {
+            return repo.findByOrderId(orderId).get();
+        }
+
+        var delivery = new Delivery();
+        delivery.setId(UUID.randomUUID().toString());
+        delivery.setOrderId(orderId);
+        delivery.setDriverId(driverId);
+        delivery.setStatus(DeliveryStatus.ASSIGNED);
+        delivery.setEtaMinutes(etaMinutes);
+
+        return repo.save(delivery);
+    }
+
+    @Transactional
     public Delivery createFromEvent(DriverAssignedEvent event) {
         var p = event.payload;
         MDC.put("orderId",  p.orderId);

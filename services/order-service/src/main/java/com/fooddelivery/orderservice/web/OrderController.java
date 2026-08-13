@@ -34,6 +34,29 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
     }
 
+    @PatchMapping("/{orderId}/delivered")
+    public ResponseEntity<Map<String, String>> markDelivered(
+            @PathVariable String orderId) {
+
+        orderService.markDelivered(orderId);
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "orderId", orderId,
+                        "status", "DELIVERED"
+                )
+        );
+    }
+
+    @PatchMapping("/{orderId}/driver-assigned")
+    public ResponseEntity<OrderResponse> markDriverAssigned(
+            @PathVariable String orderId) {
+
+        orderService.markDriverAssigned(orderId);
+
+        return ResponseEntity.ok(orderService.getOrder(orderId));
+    }
+
     @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidation(
             org.springframework.web.bind.MethodArgumentNotValidException ex) {
