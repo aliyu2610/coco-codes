@@ -22,9 +22,7 @@
 | Order              | Order ID                               | Status    | Total       |
 | ------------------ | -------------------------------------- | --------- | ----------- |
 | Pizza Palace Order | `f0253d3e-cb9e-4383-92b5-4b7b617f927c` | `PENDING` | `598` cents |
-
 | Pizza Palace Order | `9e1d3109-2f07-4cbe-9b70-0e06dd815e24` | `PENDING` | `598` cents |
-
 | Pizza Palace Order | `8f87d96a-5e09-4989-9f82-173c4ca6e35b` | `PENDING` | `749` cents |
 
 
