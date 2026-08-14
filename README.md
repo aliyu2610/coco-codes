@@ -12,8 +12,8 @@
 
 ### Menu Items
 
-| Menu Item        | Menu Item ID                           | Restaurant ID                          | Prices
-| ---------------- | -------------------------------------- | -------------------------------------- |
+| Menu Item        | Menu Item ID                           | Restaurant ID                          | Prices     |
+| ---------------- | -------------------------------------- | -------------------------------------- |------------|
 | Margherita Pizza | `e67c935c-bcd7-4269-b8ff-f2f71a86f4fe` |`ab5b17b0-d0a6-402c-bf48-2b1354ac8188` | `299` cents |
 | Pasta | `92fb7b5e-4191-4dc1-8482-874dc6558f5a` | `ab5b17b0-d0a6-402c-bf48-2b1354ac8188` | `450` cents |
 
