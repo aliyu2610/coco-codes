@@ -14,6 +14,8 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import com.fooddelivery.orderservice.eta.EtaClient;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -55,8 +62,20 @@ class OrderControllerIntegrationTest {
     @Autowired
     OrderRepository orderRepository;
 
+    @MockBean
+    EtaClient etaClient;
+
     @Test
     void postOrder_persistsRow() throws Exception {
+        
+        when(etaClient.predictEta(
+                anyString(),
+                anyDouble(),
+                anyInt(),
+                anyDouble(),
+                anyDouble()
+        )).thenReturn(33);
+        
         var body = Map.of(
                 "customerId", "cust-abc",
                 "restaurantId", "rest-xyz",
